@@ -181,6 +181,57 @@ async function handleRequest(request, env, ctx) {
       });
     }
 
+    // 添加 sitemap 监控
+    if (path === '/api/feeds/add' && request.method === 'POST') {
+      const { url } = await request.json();
+      
+      if (!url) {
+        return new Response(JSON.stringify({
+          status: 'error',
+          message: '缺少 URL 参数'
+        }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const result = await rssManager.addFeed(url);
+      
+      return new Response(JSON.stringify({
+        status: result.success ? 'success' : 'error',
+        message: result.success ? '添加成功' : result.errorMsg,
+        result: result,
+        timestamp: new Date().toISOString()
+      }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // 删除 sitemap 监控
+    if (path === '/api/feeds/remove' && request.method === 'POST') {
+      const { url } = await request.json();
+      
+      if (!url) {
+        return new Response(JSON.stringify({
+          status: 'error',
+          message: '缺少 URL 参数'
+        }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const result = await rssManager.removeFeed(url);
+      
+      return new Response(JSON.stringify({
+        status: result.success ? 'success' : 'error',
+        message: result.success ? '删除成功' : result.errorMsg,
+        timestamp: new Date().toISOString()
+      }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
     // 测试通知
     if (path === '/test/notification' && request.method === 'POST') {
       const result = await notificationManager.sendTestMessage();
@@ -215,10 +266,13 @@ async function handleRequest(request, env, ctx) {
       endpoints: [
         '/health - 健康检查',
         '/monitor - 手动触发监控 (POST)',
-        '/webhook/telegram - Telegram Webhook',
-        '/webhook/discord - Discord Webhook',
         '/api/status - API 状态',
-        '/test/notification - 测试通知 (POST)'
+        '/api/feeds/add - 添加 sitemap 监控 (POST)',
+        '/api/feeds/remove - 删除 sitemap 监控 (POST)',
+        '/test/notification - 测试通知 (POST)',
+        '/test/simple - 简单文本测试 (POST)',
+        '/webhook/telegram - Telegram Webhook',
+        '/webhook/discord - Discord Webhook'
       ],
       enabled_channels: notificationManager.enabledChannels,
       timestamp: new Date().toISOString()
