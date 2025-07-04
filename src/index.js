@@ -194,6 +194,21 @@ async function handleRequest(request, env, ctx) {
       });
     }
 
+    // 简单文本测试
+    if (path === '/test/simple' && request.method === 'POST') {
+      const { sendTextMessage } = await import('./apps/feishu-sender.js');
+      const result = await sendTextMessage('🔔 飞书简单文本测试消息\n\n时间: ' + new Date().toLocaleString('zh-CN') + '\n状态: 正常');
+      
+      return new Response(JSON.stringify({
+        status: result.success ? 'success' : 'error',
+        message: result.success ? '简单文本消息已发送' : '发送失败',
+        result: result,
+        timestamp: new Date().toISOString()
+      }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
     // 默认响应
     return new Response(JSON.stringify({
       message: 'Site Bot API',

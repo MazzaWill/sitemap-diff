@@ -17,11 +17,41 @@ export async function sendFeishuMessage(message) {
       return { success: false, error: '飞书通知未启用' };
     }
 
+    // 添加时间戳
+    const timestamp = Math.floor(Date.now() / 1000).toString();
+    
+    // 如果有签名密钥，生成签名
+    let headers = {
+      'Content-Type': 'application/json'
+    };
+
+    if (feishuConfig.secret) {
+      const stringToSign = timestamp + '\n' + feishuConfig.secret;
+      
+      // 使用 Web Crypto API 生成 HMAC-SHA256 签名
+      const encoder = new TextEncoder();
+      const keyData = encoder.encode(feishuConfig.secret);
+      const messageData = encoder.encode(stringToSign);
+      
+      const cryptoKey = await crypto.subtle.importKey(
+        'raw',
+        keyData,
+        { name: 'HMAC', hash: 'SHA-256' },
+        false,
+        ['sign']
+      );
+      
+      const signature = await crypto.subtle.sign('HMAC', cryptoKey, messageData);
+      const signatureBase64 = btoa(String.fromCharCode(...new Uint8Array(signature)));
+      
+      headers['X-Lark-Request-Timestamp'] = timestamp;
+      headers['X-Lark-Request-Nonce'] = Math.random().toString(36).substring(7);
+      headers['X-Lark-Signature'] = signatureBase64;
+    }
+
     const response = await fetch(feishuConfig.webhook, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
+      headers: headers,
       body: JSON.stringify(message)
     });
 

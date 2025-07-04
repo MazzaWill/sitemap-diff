@@ -23,6 +23,7 @@ export const gmailConfig = {
 
 export const feishuConfig = {
   webhook: null, // 飞书 Webhook URL
+  secret: null, // 飞书签名密钥（可选）
   enabled: false, // 是否启用飞书通知
 };
 
@@ -48,6 +49,7 @@ export function initConfig(env) {
 
   // 飞书配置
   feishuConfig.webhook = env.FEISHU_WEBHOOK || "";
+  feishuConfig.secret = env.FEISHU_SECRET || "";
   feishuConfig.enabled = !!feishuConfig.webhook;
 
   console.log("配置初始化完成");
