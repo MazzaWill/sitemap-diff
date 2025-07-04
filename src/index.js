@@ -5,11 +5,7 @@
 
 import { initConfig, validateConfig } from './config.js';
 import { RSSManager } from './services/rss-manager.js';
-import {
-  sendUpdateNotification,
-  sendKeywordsSummary,
-  handleTelegramUpdate
-} from './apps/telegram-bot.js';
+import { notificationManager } from './services/notification-manager.js';
 import { handleDiscordInteraction } from './apps/discord-bot.js';
 
 // 全局变量
@@ -83,7 +79,7 @@ async function performScheduledMonitoring(env) {
 
           // 只有在有新URL时才发送更新通知
           if (result.newUrls && result.newUrls.length > 0) {
-            await sendUpdateNotification(url, result.newUrls, sitemapContent);
+            await notificationManager.sendUpdateNotification(url, result.newUrls, sitemapContent);
             console.log(`✨ 订阅源 ${url} 更新成功，发现 ${result.newUrls.length} 个新URL`);
             allNewUrls.push(...result.newUrls);
           } else {
@@ -104,7 +100,7 @@ async function performScheduledMonitoring(env) {
     // 发送关键词汇总
     if (allNewUrls.length > 0) {
       console.log(`📊 发送关键词汇总，共 ${allNewUrls.length} 个新URL`);
-      await sendKeywordsSummary(allNewUrls);
+      await notificationManager.sendKeywordsSummary(allNewUrls);
     }
 
     console.log('✅ 定时监控任务完成');
@@ -153,7 +149,7 @@ async function handleRequest(request, env, ctx) {
     // Telegram Webhook
     if (path === '/webhook/telegram' && request.method === 'POST') {
       const update = await request.json();
-      const result = await handleTelegramUpdate(update, rssManager);
+      const result = await notificationManager.handleTelegramUpdate(update, rssManager);
 
       return new Response(JSON.stringify(result), {
         headers: { 'Content-Type': 'application/json' }
@@ -173,9 +169,25 @@ async function handleRequest(request, env, ctx) {
     // API 状态
     if (path === '/api/status') {
       const feeds = rssManager ? await rssManager.getFeeds() : [];
+      const channelStatus = notificationManager.getChannelStatus();
       return new Response(JSON.stringify({
         status: 'running',
         feeds: feeds,
+        notification_channels: channelStatus,
+        enabled_channels: notificationManager.enabledChannels,
+        timestamp: new Date().toISOString()
+      }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // 测试通知
+    if (path === '/test/notification' && request.method === 'POST') {
+      const result = await notificationManager.sendTestMessage();
+      return new Response(JSON.stringify({
+        status: 'success',
+        message: '测试消息已发送',
+        result: result,
         timestamp: new Date().toISOString()
       }), {
         headers: { 'Content-Type': 'application/json' }
@@ -190,8 +202,10 @@ async function handleRequest(request, env, ctx) {
         '/monitor - 手动触发监控 (POST)',
         '/webhook/telegram - Telegram Webhook',
         '/webhook/discord - Discord Webhook',
-        '/api/status - API 状态'
+        '/api/status - API 状态',
+        '/test/notification - 测试通知 (POST)'
       ],
+      enabled_channels: notificationManager.enabledChannels,
       timestamp: new Date().toISOString()
     }), {
       headers: { 'Content-Type': 'application/json' }

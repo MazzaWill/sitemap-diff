@@ -14,8 +14,11 @@
    - 安装 Node.js 16+ 版本
    - 安装 npm 或 yarn
 
-3. **Bot Token**
-   - Telegram Bot Token (从 @BotFather 获取)
+3. **通知渠道配置**
+   - 至少需要配置一个通知渠道（支持：Telegram、Gmail、飞书）
+   - Telegram Bot Token (可选，从 @BotFather 获取)
+   - Gmail 邮箱配置 (可选)
+   - 飞书 Webhook URL (可选)
    - Discord Bot Token (可选，从 Discord Developer Portal 获取)
 
 ## 🚀 快速部署
@@ -73,6 +76,9 @@ preview_id = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  # 预览环境 ID
 
 ### 步骤 6: 设置环境变量
 
+**至少需要配置一个通知渠道，支持以下选项：**
+
+#### Telegram 配置 (可选)
 ```bash
 # 设置 Telegram Bot Token
 wrangler secret put TELEGRAM_BOT_TOKEN
@@ -81,8 +87,33 @@ wrangler secret put TELEGRAM_BOT_TOKEN
 # 设置目标聊天 ID
 wrangler secret put TELEGRAM_TARGET_CHAT
 # 输入频道用户名（如 @mychannel）或用户 ID
+```
 
-# 设置 Discord Token (可选)
+#### Gmail 配置 (可选)
+```bash
+# 设置 Gmail 用户名
+wrangler secret put GMAIL_USER
+# 输入你的 Gmail 邮箱地址
+
+# 设置 Gmail 应用密码
+wrangler secret put GMAIL_APP_PASSWORD
+# 输入你的 Gmail 应用密码
+
+# 设置收件人邮箱
+wrangler secret put GMAIL_TO
+# 输入接收通知的邮箱地址
+```
+
+#### 飞书配置 (可选)
+```bash
+# 设置飞书 Webhook URL
+wrangler secret put FEISHU_WEBHOOK
+# 输入你的飞书群组 Webhook URL
+```
+
+#### Discord 配置 (可选)
+```bash
+# 设置 Discord Token
 wrangler secret put DISCORD_TOKEN
 # 输入你的 Discord Bot Token
 ```
@@ -106,13 +137,25 @@ npm run deploy
 
 ### 环境变量说明
 
+**至少需要配置一组通知渠道的完整变量**
+
 | 变量名 | 必填 | 格式 | 说明 |
 |--------|------|------|------|
-| `TELEGRAM_BOT_TOKEN` | ✅ | `123456789:ABCdefGHIjklMNOpqrsTUVwxyz` | Telegram 机器人 Token |
-| `TELEGRAM_TARGET_CHAT` | ✅ | `@channelname` 或 `123456789` | 消息发送目标 |
-| `DISCORD_TOKEN` | ❌ | `MTIzNDU2Nzg5MDEyMzQ1Njc4.GhIjKl.MnOpQrStUvWxYz` | Discord 机器人 Token |
+| `TELEGRAM_BOT_TOKEN` | ⚪ | `123456789:ABCdefGHIjklMNOpqrsTUVwxyz` | Telegram 机器人 Token |
+| `TELEGRAM_TARGET_CHAT` | ⚪ | `@channelname` 或 `123456789` | Telegram 消息发送目标 |
+| `GMAIL_USER` | ⚪ | `your.email@gmail.com` | Gmail 邮箱地址 |
+| `GMAIL_APP_PASSWORD` | ⚪ | `abcd efgh ijkl mnop` | Gmail 应用密码 |
+| `GMAIL_TO` | ⚪ | `recipient@example.com` | 邮件接收地址 |
+| `FEISHU_WEBHOOK` | ⚪ | `https://open.feishu.cn/open-apis/bot/v2/hook/...` | 飞书 Webhook URL |
+| `DISCORD_TOKEN` | ⚪ | `MTIzNDU2Nzg5MDEyMzQ1Njc4.GhIjKl.MnOpQrStUvWxYz` | Discord 机器人 Token |
 
-### 获取 Bot Token
+**说明：**
+- ⚪ 表示可选，但至少需要配置一个完整的通知渠道
+- Telegram 需要同时配置 `TELEGRAM_BOT_TOKEN` 和 `TELEGRAM_TARGET_CHAT`
+- Gmail 需要同时配置 `GMAIL_USER`、`GMAIL_APP_PASSWORD` 和 `GMAIL_TO`
+- 飞书只需要配置 `FEISHU_WEBHOOK`
+
+### 获取通知渠道配置
 
 #### Telegram Bot Token
 
@@ -120,6 +163,20 @@ npm run deploy
 2. 发送 `/newbot` 命令
 3. 按提示设置机器人名称和用户名
 4. 获得 Token，格式如：`123456789:ABCdefGHIjklMNOpqrsTUVwxyz`
+
+#### Gmail 应用密码
+
+1. 登录 Google 账户，进入 [应用密码页面](https://myaccount.google.com/apppasswords)
+2. 选择「邮件」和「其他设备」
+3. 生成应用密码，格式如：`abcd efgh ijkl mnop`
+4. 使用此密码作为 `GMAIL_APP_PASSWORD`
+
+#### 飞书 Webhook URL
+
+1. 在飞书群组中，点击右上角设置
+2. 选择「群机器人」→「添加机器人」
+3. 选择「自定义机器人」并配置
+4. 复制 Webhook URL，格式如：`https://open.feishu.cn/open-apis/bot/v2/hook/...`
 
 #### Discord Bot Token
 
@@ -147,7 +204,9 @@ npm run deploy
 
 ## 🌐 Webhook 配置
 
-### Telegram Webhook
+### 通知渠道配置
+
+#### Telegram Webhook (如果启用了 Telegram)
 
 设置 Telegram Bot 的 Webhook URL：
 
@@ -157,7 +216,15 @@ curl -X POST "https://api.telegram.org/bot<YOUR_BOT_TOKEN>/setWebhook" \
      -d '{"url": "https://site-bot.your-subdomain.workers.dev/webhook/telegram"}'
 ```
 
-### Discord Webhook
+#### Gmail 配置 (如果启用了 Gmail)
+
+确保已在 Google 账户中启用「两步验证」并生成了应用密码。
+
+#### 飞书配置 (如果启用了飞书)
+
+飞书 Webhook 无需额外配置，创建机器人时会自动提供 URL。
+
+#### Discord Webhook (如果启用了 Discord)
 
 在 Discord Developer Portal 中设置交互端点：
 
@@ -182,9 +249,16 @@ https://site-bot.your-subdomain.workers.dev/health
 
 ### API 状态
 
-访问 `/api/status` 查看运行状态：
+访问 `/api/status` 查看运行状态和通知渠道配置：
 ```
 https://site-bot.your-subdomain.workers.dev/api/status
+```
+
+### 测试通知
+
+发送测试消息到所有启用的通知渠道：
+```bash
+curl -X POST "https://site-bot.your-subdomain.workers.dev/test/notification"
 ```
 
 ## 🔍 故障排除
@@ -196,8 +270,9 @@ https://site-bot.your-subdomain.workers.dev/api/status
    - 确认 KV 命名空间 ID 是否正确
 
 2. **"配置验证失败"**
-   - 确保 `TELEGRAM_BOT_TOKEN` 和 `TELEGRAM_TARGET_CHAT` 已设置
-   - 检查 Token 格式是否正确
+   - 确保至少配置了一个完整的通知渠道
+   - 检查对应的环境变量是否正确设置
+   - 使用 `/api/status` 查看配置状态
 
 3. **"KV 存储错误"**
    - 确认 KV 命名空间已创建
@@ -277,11 +352,26 @@ wrangler secret delete TELEGRAM_BOT_TOKEN
 
 恭喜！你的 Site Bot 已经成功部署到 Cloudflare Workers。
 
+### 支持的通知渠道
+
+✅ **Telegram** - 支持交互式命令和实时通知
+✅ **Gmail** - 支持富文本邮件和附件
+✅ **飞书** - 支持卡片消息和美观展示
+✅ **Discord** - 支持基础消息通知
+
+### 通知内容
+
+- **站点更新通知**：当监控的 sitemap 有新内容时发送
+- **关键词汇总**：定期发送所有新内容的关键词统计
+- **系统状态**：重要系统事件和错误通知
+
 ### 下一步
 
-1. **测试功能**：在 Telegram 中发送 `/start` 命令
-2. **添加监控**：使用 `/rss add URL` 添加 sitemap
-3. **查看状态**：访问 `/api/status` 查看运行状态
+1. **测试通知**：访问 `/test/notification` 测试所有启用的通知渠道
+2. **检查配置**：访问 `/api/status` 查看通知渠道配置状态
+3. **添加监控**：
+   - 如果启用了 Telegram，在 Telegram 中发送 `/start` 命令
+   - 使用 `/rss add URL` 添加 sitemap 监控
 4. **监控日志**：使用 `wrangler tail` 查看实时日志
 
 ### 支持
