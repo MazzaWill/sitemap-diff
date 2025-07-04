@@ -38,44 +38,14 @@ export class RSSManager {
       const domain = new URL(url).hostname;
       const today = new Date().toISOString().split('T')[0].replace(/-/g, '');
 
-      // 检查今天是否已经更新过
-      const lastUpdateKey = `last_update_${domain}`;
-      const lastUpdate = await this.kv.get(lastUpdateKey);
-
-      // 临时注释掉日期检查，方便测试
-      /*
-      if (lastUpdate === today) {
-        // 今天已经更新过，比较现有文件
-        const currentContent = await this.kv.get(`sitemap_current_${domain}`);
-        const latestContent = await this.kv.get(`sitemap_latest_${domain}`);
-
-        if (currentContent && latestContent) {
-          const newUrls = this.compareSitemaps(currentContent, latestContent);
-          return {
-            success: true,
-            errorMsg: "今天已经更新过此sitemap, 但没发送",
-            datedFile: null,
-            newUrls
-          };
-        }
-
-        return {
-          success: true,
-          errorMsg: "今天已经更新过此sitemap",
-          datedFile: null,
-          newUrls: []
-        };
-      }
-      */
-
       // 使用新的递归解析功能获取所有实际内容 URL
       console.log(`🚀 开始递归解析 sitemap: ${url}`);
       const allUrls = await getAllContentURLs(url);
       console.log(`🎯 递归解析结果: 获取到 ${allUrls.length} 个 URL`);
       
       if (allUrls.length === 0) {
-        console.error(`❌ 未能获取到任何有效的 URL from ${url}`);
-        throw new Error('未能获取到任何有效的 URL');
+        console.warn(`⚠️ 未能从 ${url} 获取到任何有效的 URL，可能是一个空的或无效的sitemap。`);
+        // 即使为空，也继续执行流程，以便能够记录空状态，并在下次有内容时检测到新增
       }
 
       console.log(`📝 前 5 个 URL 示例:`, allUrls.slice(0, 5));
@@ -83,33 +53,44 @@ export class RSSManager {
       // 将 URL 列表转换为简化的 XML 格式便于存储和比较
       console.log(`🔄 转换 URL 列表为 XML 格式...`);
       const urlListXml = this.createUrlListXml(allUrls);
-      console.log(`✅ XML 转换完成，长度: ${urlListXml.length} 字符`);
+      console.log(`✅ XML 转换完成`);
 
       let newUrls = [];
 
-      // 如果存在 current 文件，比较差异
+      // 关键逻辑修改：总是先获取当前版本用于对比
       const currentContent = await this.kv.get(`sitemap_current_${domain}`);
-      if (currentContent) {
-        console.log(`🔍 发现已存在的 sitemap，开始比较差异...`);
-        newUrls = this.compareSitemaps(urlListXml, currentContent);
-        console.log(`📊 比较结果: 发现 ${newUrls.length} 个新 URL`);
-        // 将 current 移动到 latest
-        await this.kv.put(`sitemap_latest_${domain}`, currentContent);
-        console.log(`💾 已备份当前 sitemap 到 latest`);
+      
+      // 只有在下载到的新内容与当前存储的内容不同时，才执行更新和对比逻辑
+      if (urlListXml !== currentContent) {
+        console.log(`🔍 内容发生变化，开始执行更新和对比...`);
+        
+        // 备份：将当前版本（如果存在）移动到 latest
+        if (currentContent) {
+          await this.kv.put(`sitemap_latest_${domain}`, currentContent);
+          console.log(`💾 已备份当前 sitemap 到 latest`);
+          // 对比：用新内容和刚刚备份的旧内容（即currentContent）进行比较
+          newUrls = this.compareSitemaps(urlListXml, currentContent);
+        } else {
+          // 如果是首次添加，所有URL都是新的
+          newUrls = allUrls;
+          console.log(`🆕 这是第一次添加此 sitemap，所有 ${newUrls.length} 个 URL 均视为新增`);
+        }
+
+        // 保存新文件
+        console.log(`💾 保存新的 sitemap 数据到 KV...`);
+        await this.kv.put(`sitemap_current_${domain}`, urlListXml);
+        await this.kv.put(`sitemap_dated_${domain}_${today}`, urlListXml);
+
+        // 更新最后更新日期
+        const lastUpdateKey = `last_update_${domain}`;
+        await this.kv.put(lastUpdateKey, today);
+        console.log(`✅ 数据保存完成`);
+
       } else {
-        console.log(`🆕 这是第一次添加此 sitemap`);
+        console.log(`✅ 内容无变化，跳过更新。`);
       }
 
-      // 保存新文件
-      console.log(`💾 保存新的 sitemap 数据到 KV...`);
-      await this.kv.put(`sitemap_current_${domain}`, urlListXml);
-      await this.kv.put(`sitemap_dated_${domain}_${today}`, urlListXml);
-
-      // 更新最后更新日期
-      await this.kv.put(lastUpdateKey, today);
-      console.log(`✅ 数据保存完成`);
-
-      console.log(`🎉 sitemap 处理成功: ${domain}, 包含 ${allUrls.length} 个 URL，${newUrls.length} 个新 URL`);
+      console.log(`🎉 sitemap 处理成功: ${domain}, 共 ${allUrls.length} 个 URL，发现 ${newUrls.length} 个新 URL`);
       return {
         success: true,
         errorMsg: "",

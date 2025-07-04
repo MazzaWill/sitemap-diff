@@ -1,0 +1,6 @@
+website_name,sitemap_url,status,last_check,created_at,notes
+Cloudflare博客,https://blog.cloudflare.com/sitemap.xml,active,,2025-07-04 09:00:00,重要技术博客
+OpenAI博客,https://openai.com/sitemap.xml,active,,2025-07-04 09:00:00,AI资讯
+Vercel博客,https://vercel.com/sitemap.xml,active,,2025-07-04 09:00:00,前端技术
+Next.js文档,https://nextjs.org/sitemap.xml,active,,2025-07-04 09:00:00,框架文档
+React文档,https://react.dev/sitemap.xml,inactive,,2025-07-04 09:00:00,暂停监控

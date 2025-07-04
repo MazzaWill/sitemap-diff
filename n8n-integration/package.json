@@ -1,0 +1,47 @@
+{
+  "name": "sitemap-diff-n8n-integration",
+  "version": "1.0.0",
+  "description": "n8n integration package for sitemap-diff monitoring system",
+  "main": "index.js",
+  "scripts": {
+    "setup": "echo 'Please follow the SETUP-GUIDE.md for deployment instructions'",
+    "validate": "node scripts/validate-config.js",
+    "test": "node scripts/test-connections.js"
+  },
+  "keywords": [
+    "n8n",
+    "sitemap",
+    "monitoring",
+    "automation",
+    "google-sheets",
+    "cloudflare-worker"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "files": [
+    "*.json",
+    "*.md",
+    "*.csv",
+    "scripts/",
+    "examples/"
+  ],
+  "n8n": {
+    "workflows": [
+      "sitemap-monitoring-workflow.json"
+    ],
+    "templates": [
+      "google-sheets-template.csv",
+      "monitoring-logs-template.csv"
+    ]
+  },
+  "dependencies": {},
+  "devDependencies": {},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/your-username/sitemap-diff.git"
+  },
+  "bugs": {
+    "url": "https://github.com/your-username/sitemap-diff/issues"
+  },
+  "homepage": "https://github.com/your-username/sitemap-diff#readme"
+}

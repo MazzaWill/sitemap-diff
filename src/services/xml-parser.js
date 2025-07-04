@@ -19,25 +19,22 @@ export function parseXML(xmlString) {
  * @returns {string[]} URL 列表
  */
 export function extractURLs(xmlContent) {
-  try {
-    const doc = parseXML(xmlContent);
-    const urls = [];
-
-    // 查找所有 <loc> 标签
-    const locElements = doc.querySelectorAll('loc');
-
-    for (const element of locElements) {
-      const url = element.textContent.trim();
-      if (url) {
-        urls.push(url);
-      }
-    }
-
-    return urls;
-  } catch (error) {
-    console.error('解析 XML 失败:', error);
+  if (!xmlContent) {
     return [];
   }
+  // 在Cloudflare Workers环境中，DOMParser不可用。
+  // 我们使用更简单、更可靠的正则表达式来提取<loc>标签中的内容。
+  const locRegex = /<loc>(.*?)<\/loc>/g;
+  const matches = xmlContent.match(locRegex);
+
+  if (!matches) {
+    return [];
+  }
+
+  return matches.map(match => {
+    // 从 <loc>https://example.com</loc> 中提取出 https://example.com
+    return match.replace(/<loc>|<\/loc>/g, '').trim();
+  });
 }
 
 /**
