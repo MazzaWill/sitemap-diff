@@ -4,7 +4,7 @@
  * 使用 Cloudflare KV 存储替代文件系统
  */
 
-import { parseXML, extractURLs } from './xml-parser.js';
+import { parseXML, extractURLs, getAllContentURLs, isSitemapIndex } from './xml-parser.js';
 
 export class RSSManager {
   constructor(kvStorage) {
@@ -42,6 +42,8 @@ export class RSSManager {
       const lastUpdateKey = `last_update_${domain}`;
       const lastUpdate = await this.kv.get(lastUpdateKey);
 
+      // 临时注释掉日期检查，方便测试
+      /*
       if (lastUpdate === today) {
         // 今天已经更新过，比较现有文件
         const currentContent = await this.kv.get(`sitemap_current_${domain}`);
@@ -64,53 +66,50 @@ export class RSSManager {
           newUrls: []
         };
       }
+      */
 
-      // 下载新文件
-      const headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
-      };
-
-      const response = await fetch(url, {
-        method: 'GET',
-        headers,
-        cf: { cacheTtl: 300 } // 缓存5分钟
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      // 使用新的递归解析功能获取所有实际内容 URL
+      console.log(`🚀 开始递归解析 sitemap: ${url}`);
+      const allUrls = await getAllContentURLs(url);
+      console.log(`🎯 递归解析结果: 获取到 ${allUrls.length} 个 URL`);
+      
+      if (allUrls.length === 0) {
+        console.error(`❌ 未能获取到任何有效的 URL from ${url}`);
+        throw new Error('未能获取到任何有效的 URL');
       }
 
-      let newContent;
-      if (url.endsWith('.gz')) {
-        console.log(`解压 gzipped sitemap: ${url}`);
-        if (!response.body) {
-          throw new Error('Response body is null, cannot decompress.');
-        }
-        const decompressionStream = new DecompressionStream('gzip');
-        const decompressedStream = response.body.pipeThrough(decompressionStream);
-        newContent = await new Response(decompressedStream).text();
-      } else {
-        newContent = await response.text();
-      }
+      console.log(`📝 前 5 个 URL 示例:`, allUrls.slice(0, 5));
+
+      // 将 URL 列表转换为简化的 XML 格式便于存储和比较
+      console.log(`🔄 转换 URL 列表为 XML 格式...`);
+      const urlListXml = this.createUrlListXml(allUrls);
+      console.log(`✅ XML 转换完成，长度: ${urlListXml.length} 字符`);
 
       let newUrls = [];
 
       // 如果存在 current 文件，比较差异
       const currentContent = await this.kv.get(`sitemap_current_${domain}`);
       if (currentContent) {
-        newUrls = this.compareSitemaps(newContent, currentContent);
+        console.log(`🔍 发现已存在的 sitemap，开始比较差异...`);
+        newUrls = this.compareSitemaps(urlListXml, currentContent);
+        console.log(`📊 比较结果: 发现 ${newUrls.length} 个新 URL`);
         // 将 current 移动到 latest
         await this.kv.put(`sitemap_latest_${domain}`, currentContent);
+        console.log(`💾 已备份当前 sitemap 到 latest`);
+      } else {
+        console.log(`🆕 这是第一次添加此 sitemap`);
       }
 
       // 保存新文件
-      await this.kv.put(`sitemap_current_${domain}`, newContent);
-      await this.kv.put(`sitemap_dated_${domain}_${today}`, newContent);
+      console.log(`💾 保存新的 sitemap 数据到 KV...`);
+      await this.kv.put(`sitemap_current_${domain}`, urlListXml);
+      await this.kv.put(`sitemap_dated_${domain}_${today}`, urlListXml);
 
       // 更新最后更新日期
       await this.kv.put(lastUpdateKey, today);
+      console.log(`✅ 数据保存完成`);
 
-      console.log(`sitemap 已保存到 KV: ${domain}`);
+      console.log(`🎉 sitemap 处理成功: ${domain}, 包含 ${allUrls.length} 个 URL，${newUrls.length} 个新 URL`);
       return {
         success: true,
         errorMsg: "",
@@ -211,6 +210,25 @@ export class RSSManager {
         errorMsg: `删除失败: ${error.message}`
       };
     }
+  }
+
+  /**
+   * 将 URL 列表转换为简化的 XML 格式
+   * @param {string[]} urls - URL 列表
+   * @returns {string} XML 字符串
+   */
+  createUrlListXml(urls) {
+    const xmlParts = [
+      '<?xml version="1.0" encoding="UTF-8"?>',
+      '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+    ];
+
+    for (const url of urls) {
+      xmlParts.push(`  <url><loc>${url}</loc></url>`);
+    }
+
+    xmlParts.push('</urlset>');
+    return xmlParts.join('\n');
   }
 
   /**
