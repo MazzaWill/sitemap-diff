@@ -1,0 +1,436 @@
+{
+  "name": "AI SaaS Sitemap Monitoring (Sanitized)",
+  "nodes": [
+    {
+      "parameters": {
+        "triggerTimes": {
+          "item": [
+            {
+              "mode": "=custom",
+              "cronExpression": "0 */2 * * *"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.cron",
+      "position": [
+        -1240,
+        640
+      ],
+      "name": "每2小时触发",
+      "id": "72d2e32a-1c1d-42ec-ae6d-e9cc13b38fe9",
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "<<YOUR_SHEET_ID>>",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "sitemap-config",
+          "mode": "name"
+        },
+        "combineFilters": "OR",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [
+        -1040,
+        640
+      ],
+      "name": "读取Sheet配置",
+      "id": "2f715b1c-e292-411d-991c-c9d7eca32675",
+      "typeVersion": 4.6,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "<<CREDENTIAL_ID>>",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -800,
+        640
+      ],
+      "id": "af2a5b76-1185-46a5-b36c-f366610a65d1",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "name": "Replace Me",
+      "typeVersion": 1,
+      "position": [
+        -660,
+        780
+      ],
+      "id": "85f37f02-6b55-48e1-b5e3-054a46198156"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "3f4292f2-7068-4fb9-9732-402b07cda10f",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "active",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -520,
+        560
+      ],
+      "id": "43e60f0f-3a0e-477a-b4e8-1698c647e179",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "<<YOUR_SHEET_ID>>",
+          "mode": "list",
+          "cachedResultName": "Sitemap监控数据",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/<<YOUR_SHEET_ID>>/edit"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "sitemap-config",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/<<YOUR_SHEET_ID>>/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [
+            "sitemap_url"
+          ],
+          "schema": [
+            {
+              "id": "website_name",
+              "displayName": "website_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "sitemap_url",
+              "displayName": "sitemap_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "last_check",
+              "displayName": "last_check",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "notes",
+              "displayName": "notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        280,
+        560
+      ],
+      "id": "9115e41e-cdb3-4012-a411-3d52f892dd6a",
+      "name": "Update row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "<<CREDENTIAL_ID>>",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "642ac8b7-6aba-4cd6-bc71-ff411f740738",
+              "name": "sitemap_url",
+              "value": "={{ $('If').item.json.sitemap_url }}",
+              "type": "string"
+            },
+            {
+              "id": "c95cc40f-80c7-456f-a0b3-a3d1bdacc361",
+              "name": "status",
+              "value": "active",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        60,
+        560
+      ],
+      "id": "c5ee7e35-f99e-40e7-ab47-a36ecbd35887",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "content": "\n\n## 一、判断是否有新增Sitemap URL\n\n### 如果有新增URL则调用sitemap 监控微服务API  /api/feeds/add",
+        "height": 660,
+        "width": 920,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -1280,
+        380
+      ],
+      "typeVersion": 1,
+      "id": "348424d9-b54f-4139-a135-6037fd5b5a8a",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "\n\n## 二、更新Sheet sitemap-config\n\n### 将新增网站字段status的状态改为active",
+        "height": 660,
+        "width": 760
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -260,
+        380
+      ],
+      "typeVersion": 1,
+      "id": "a6c2bea8-29ce-4a5e-aede-134540b43d40",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://<your-worker-domain>/api/feeds/add",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "=        {\n          \"url\": \"{{ $json.sitemap_url }}\"\n        }",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -160,
+        560
+      ],
+      "id": "11e634d9-2852-47af-92c3-2d9adf556bf1",
+      "name": "更新监控网站"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://<your-worker-domain>/monitor",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -160,
+        800
+      ],
+      "id": "f08a8e37-01ac-48cb-82a0-29fb72e336ef",
+      "name": "执行监控"
+    }
+  ],
+  "pinData": {
+    "更新监控网站": [
+      {
+        "json": {
+          "status": "success",
+          "message": "添加成功",
+          "result": {
+            "success": true,
+            "errorMsg": "成功添加",
+            "datedFile": "sitemap_dated_example_20250704",
+            "newUrls": []
+          },
+          "timestamp": "2025-07-04T11:20:12.559Z"
+        }
+      }
+    ]
+  },
+  "connections": {
+    "每2小时触发": {
+      "main": [
+        [
+          {
+            "node": "读取Sheet配置",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "读取Sheet配置": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "执行监控",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Replace Me",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Replace Me": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "更新监控网站",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Update row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update row in sheet": {
+      "main": [
+        []
+      ]
+    },
+    "更新监控网站": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "fa2c176d-f37c-4ecd-a625-b35cf34298f1",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "<<INSTANCE_ID>>"
+  },
+  "id": "ymkMbFyer0409GMV",
+  "tags": [
+    {
+      "createdAt": "2025-07-04T07:19:00.344Z",
+      "updatedAt": "2025-07-04T07:19:00.344Z",
+      "id": "k5sPO86JMBS6TBbO",
+      "name": "sitemap-monitoring"
+    }
+  ]
+} 

@@ -1,4 +1,0 @@
-timestamp,sync_action,monitoring_status,worker_message,success
-2025-07-04 10:00:00,skip,completed,Monitoring completed successfully,TRUE
-2025-07-04 12:00:00,add:1 remove:0,completed,Monitoring completed successfully,TRUE
-2025-07-04 14:00:00,skip,completed,Monitoring completed successfully,TRUE

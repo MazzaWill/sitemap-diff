@@ -1,6 +1,6 @@
 # Site Bot - 网站监控机器人
 
-一个基于 Cloudflare Workers 的智能网站监控机器人，自动监控多个网站的 sitemap 变化，并通过 Telegram/Discord 推送更新通知。
+一个基于 Cloudflare Workers 的智能网站监控机器人，自动监控多个网站的 sitemap 变化，并通过 飞书/Telegram/Discord 推送更新通知。
 
 ## 🎯 项目特色
 
@@ -12,6 +12,33 @@
 - **关键词汇总**：自动提取和分析新增内容关键词
 - **实时交互**：支持命令行操作和状态查询
 - **版本管理**：自动备份和版本控制，支持历史记录查询
+- **可视化工作流**：内置 n8n 流程，图形化同步监控列表 & 执行监控
+
+## 📊 n8n 集成概览
+
+![](https://r2image.wangmazha.com/2025/07/af66a1db83ff2cba6883694dc0c5ade2.png)
+
+本项目开箱即用地提供了一套 n8n 工作流，帮助你可视化地完成两件事：
+
+1. **同步监控列表**：
+   - 定时读取 Google Sheet `sitemap-config`。
+   - 发现 `status != active` 的行时自动调用 `/api/feeds/add`，完成一键接入。
+   - 成功后把该行 `status` 更新为 `active`，防止重复添加。
+
+2. **定时执行监控**：
+   - 在同步流程结束后，立即触发 `/monitor`，推进后台比对 sitemap 并发送通知。
+
+
+
+导入步骤：
+```text
+1. 打开 n8n → New Workflow → "Import from File"
+2. 选择 n8n-sitemap-monitor-workflow.json
+3. 按需修改 Google Sheet ID、Cloudflare Worker 域名
+4. 点击 Activate，即可投入运行
+```
+
+工作流的详细节点和解释请参见下文《n8n 工作流示例》一节。
 
 ---
 
@@ -624,3 +651,50 @@ https://site-bot.your-subdomain.workers.dev/api/status
 1. 查看本文档的故障排除部分
 2. 检查 Cloudflare Workers 日志
 3. 提交 Issue 到项目仓库 
+
+## 🔄 n8n 工作流示例：自动同步 + 执行监控
+
+下面这张 Mer-maid 流程图展示了当前在 n8n 中实现的两条定时工作流：
+
+```mermaid
+flowchart LR
+    subgraph A[同步新增 Sitemap URL]
+        A1[⏰ 定时触发<br/>Every&nbsp;2&nbsp;Hours]
+        A2[📄 读取 Google Sheet]
+        A3[🔁 Loop Over Items]
+        A4{status<br/>!= active?}
+        A5[🌐 HTTP → /api/feeds/add]
+        A6[✏️ Edit Fields<br/>status = active]
+        A7[✅ 更新 Sheet]
+
+        A1 --> A2 --> A3
+        A3 -- true --> A4
+        A4 -- true --> A5 --> A6 --> A7
+        A3 -- done --> A8((结束))
+        A4 -- false --> A3
+    end
+
+    subgraph B[执行监控]
+        B1[🌐 HTTP → /monitor]
+    end
+
+    %% 连接两条子流程
+    A3 -- done --> B1
+```
+
+**流程说明**
+
+1. **同步新增 Sitemap URL（紫色部分）**
+   1. 每 2 小时触发一次。
+   2. 读取 Google Sheet `sitemap-config`，逐行检查 `status` 字段。
+   3. 若发现行的 `status ≠ active`，调用 Cloudflare Worker `/api/feeds/add` 添加监控。
+   4. 添加成功后，将该行的 `status` 更新为 `active`，避免下次重复添加。
+
+2. **执行监控（黄色部分）**
+   * 当整张表循环结束后（`Loop Over Items` 的 **done** 输出），立即调用 `/monitor` 端点，触发后台比对 sitemap。
+
+> 这样设计可以保证：
+> * **监控列表** 与 Google&nbsp;Sheet 保持同步。
+> * 只有完成列表同步后才执行一次完整的 sitemap 监控，避免重复调用。
+
+如需进一步在 `/monitor` 之后接入 AI 过滤、飞书推送等，只需在图中的 **B1** 节点后串联相应节点即可。 
