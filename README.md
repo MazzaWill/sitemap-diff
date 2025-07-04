@@ -6,10 +6,12 @@
 
 - **零成本部署**：基于 Cloudflare Workers，完全免费
 - **智能监控**：自动检测 sitemap 变化，支持 .gz 压缩文件
+- **递归解析**：自动处理嵌套 sitemap 索引，获取所有实际内容 URL
 - **静默模式**：只在有更新时发送通知，避免消息轰炸
-- **多平台支持**：Telegram 和 Discord 双平台
+- **多平台支持**：支持 Telegram、Discord、Gmail、飞书四种通知渠道
 - **关键词汇总**：自动提取和分析新增内容关键词
 - **实时交互**：支持命令行操作和状态查询
+- **版本管理**：自动备份和版本控制，支持历史记录查询
 
 ---
 
@@ -72,6 +74,18 @@ POST /monitor
 GET /api/status
 ```
 
+**Sitemap 管理**：
+```
+POST /api/feeds/add     - 添加 sitemap 监控
+POST /api/feeds/remove  - 删除 sitemap 监控
+```
+
+**通知测试**：
+```
+POST /test/notification - 发送测试通知
+POST /test/simple      - 发送简单文本测试
+```
+
 **Webhook 端点**：
 ```
 POST /webhook/telegram  - Telegram Webhook
@@ -79,6 +93,92 @@ POST /webhook/discord   - Discord Webhook
 ```
 
 ### 🏗️ 系统架构
+
+#### 🔄 监控逻辑流程
+
+```mermaid
+graph TD
+    A[开始监控] --> B[获取sitemap URL]
+    B --> C{是否为sitemap索引?}
+    
+    C -->|是| D[递归解析子sitemap]
+    C -->|否| E[直接解析URL列表]
+    
+    D --> F[合并所有URL]
+    E --> F
+    F --> G[转换为XML格式]
+    
+    G --> H{KV中是否存在current?}
+    
+    H -->|不存在| I[首次添加]
+    H -->|存在| J[备份current到latest]
+    
+    I --> K[保存为current]
+    J --> L[比较current vs latest]
+    
+    L --> M{发现新URL?}
+    M -->|是| N[发送飞书通知]
+    M -->|否| O[静默处理]
+    
+    K --> P[保存dated备份]
+    N --> P
+    O --> P
+    
+    P --> Q[更新last_update日期]
+    Q --> R[完成]
+    
+    style A fill:#e1f5fe
+    style N fill:#c8e6c9
+    style O fill:#fff3e0
+    style R fill:#f3e5f5
+```
+
+#### 📊 KV 数据库字段说明
+
+系统使用 Cloudflare KV 存储来管理监控数据，主要字段类型如下：
+
+| 字段类型 | 示例 | 作用 | 数据格式 |
+|---------|------|------|---------|
+| **`rss_feeds`** | `rss_feeds` | 存储所有监控的sitemap URL列表 | `["https://site1.com/sitemap.xml", "https://site2.com/sitemap.xml"]` |
+| **`last_update_域名`** | `last_update_blog.cloudflare.com` | 记录该网站最后更新日期 | `"20250704"` |
+| **`sitemap_current_域名`** | `sitemap_current_blog.cloudflare.com` | **当前最新**的sitemap内容 | XML格式的URL列表 |
+| **`sitemap_latest_域名`** | `sitemap_latest_blog.cloudflare.com` | **上一个版本**的sitemap内容 | XML格式的URL列表 |
+| **`sitemap_dated_域名_日期`** | `sitemap_dated_pollo.ai_20250704` | **特定日期**的sitemap备份 | XML格式的URL列表 |
+
+#### 🔄 数据版本管理机制
+
+**第一天 (初次添加)**：
+```
+sitemap_current_blog.cloudflare.com = [URL1, URL2, URL3]
+sitemap_dated_blog.cloudflare.com_20250704 = [URL1, URL2, URL3]
+last_update_blog.cloudflare.com = 20250704
+```
+
+**第二天 (有新内容)**：
+```
+sitemap_latest_blog.cloudflare.com = [URL1, URL2, URL3]        # 昨天的备份
+sitemap_current_blog.cloudflare.com = [URL1, URL2, URL3, URL4] # 今天新的
+sitemap_dated_blog.cloudflare.com_20250705 = [URL1, URL2, URL3, URL4]
+
+比较结果: 新增 [URL4] → 发送飞书通知 🔔
+```
+
+**第三天 (无变化)**：
+```
+sitemap_latest_blog.cloudflare.com = [URL1, URL2, URL3, URL4]  # 昨天的
+sitemap_current_blog.cloudflare.com = [URL1, URL2, URL3, URL4] # 今天相同
+
+比较结果: 无新增 → 静默处理 🔕
+```
+
+#### 🎯 核心检测逻辑
+
+1. **静默模式**: 只在有**真正新内容**时才发送通知，避免噪音
+2. **关键比较**: `current` vs `latest` = 找出新增的URL
+3. **递归解析**: 自动处理嵌套sitemap索引，获取所有实际内容URL
+4. **备份机制**: 每日自动备份，保留历史记录
+
+### 🏗️ 系统架构图
 
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
@@ -172,6 +272,15 @@ wrangler secret put TELEGRAM_TARGET_CHAT
 # 设置 Discord Token (可选)
 wrangler secret put DISCORD_TOKEN
 # 输入你的 Discord Bot Token
+
+# 设置飞书 Webhook (可选)
+wrangler secret put FEISHU_WEBHOOK
+# 输入你的飞书群组机器人 Webhook URL
+
+# 设置 Gmail 配置 (可选)
+wrangler secret put GMAIL_USER
+wrangler secret put GMAIL_PASSWORD
+wrangler secret put GMAIL_TO
 ```
 
 **获取 TELEGRAM_TARGET_CHAT 的方法**：
@@ -181,10 +290,26 @@ wrangler secret put DISCORD_TOKEN
 3. **频道 ID**：将机器人添加到频道，使用 @userinfobot 获取频道 ID
 
 **获取 Bot Token 的方法**：
+
+**Telegram**：
 1. 在 Telegram 中找到 @BotFather
 2. 发送 `/newbot` 命令
 3. 按提示设置机器人名称和用户名
 4. 获得 Token，格式如：`123456789:ABCdefGHIjklMNOpqrsTUVwxyz`
+
+**飞书 Webhook**：
+1. 在飞书群组中点击设置 → 群机器人 → 添加机器人
+2. 选择"自定义机器人"
+3. 设置机器人名称和描述
+4. 复制生成的 Webhook URL，格式类似：
+   ```
+   https://open.feishu.cn/open-apis/bot/v2/hook/xxxxxxxxxx
+   ```
+5. 如果启用了签名校验，还需要设置：
+   ```bash
+   wrangler secret put FEISHU_SECRET
+   # 输入签名密钥
+   ```
 
 #### 步骤 7: 配置 Webhook
 
@@ -236,6 +361,11 @@ touch .dev.vars
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
 TELEGRAM_TARGET_CHAT=@your_channel_or_user_id
 DISCORD_TOKEN=your_discord_token_here
+FEISHU_WEBHOOK=https://open.feishu.cn/open-apis/bot/v2/hook/xxxxxxxxxx
+FEISHU_SECRET=your_feishu_secret_here
+GMAIL_USER=your_gmail@gmail.com
+GMAIL_PASSWORD=your_gmail_app_password
+GMAIL_TO=recipient@example.com
 ```
 
 **注意**：`.dev.vars` 文件已添加到 `.gitignore`，不会被提交到版本控制。
@@ -294,6 +424,94 @@ wrangler secret delete TELEGRAM_BOT_TOKEN
 
 ### 📊 监控和调试
 
+#### 🧪 监控功能测试
+
+**1. 添加 sitemap 监控**：
+```javascript
+// 在浏览器控制台中运行
+fetch('/api/feeds/add', {
+  method: 'POST',
+  headers: {'Content-Type': 'application/json'},
+  body: JSON.stringify({
+    url: 'https://blog.example.com/sitemap.xml'
+  })
+})
+.then(res => res.json())
+.then(data => {
+  console.log('添加结果:', data);
+  alert('监控添加完成！');
+});
+```
+
+**2. 手动触发监控任务**：
+```javascript
+// 立即执行一次监控检查
+fetch('/monitor', {
+  method: 'POST'
+})
+.then(res => res.json())
+.then(data => {
+  console.log('监控任务结果:', data);
+  alert('监控完成！检查飞书是否收到通知');
+});
+```
+
+**3. 查看监控状态**：
+```javascript
+// 查看当前所有监控的网站和状态
+fetch('/api/status')
+.then(res => res.json())
+.then(data => {
+  console.log('当前监控状态:', data);
+  console.log('监控的网站:', data.feeds);
+  console.log('启用的通知渠道:', data.enabled_channels);
+});
+```
+
+**4. 删除 sitemap 监控**：
+```javascript
+// 删除指定的监控
+fetch('/api/feeds/remove', {
+  method: 'POST',
+  headers: {'Content-Type': 'application/json'},
+  body: JSON.stringify({
+    url: 'https://blog.example.com/sitemap.xml'
+  })
+})
+.then(res => res.json())
+.then(data => {
+  console.log('删除结果:', data);
+});
+```
+
+#### 🔍 KV 数据库监控
+
+**访问 Cloudflare Dashboard**：
+1. 登录 Cloudflare Dashboard
+2. 进入 Workers → KV
+3. 点击你的 `SITEMAP_STORAGE` 命名空间
+4. 查看存储的数据结构
+
+**关键数据项检查**：
+- `rss_feeds`: 确认监控列表是否正确
+- `sitemap_current_域名`: 检查最新内容是否为实际URL而非sitemap索引
+- `last_update_域名`: 确认更新日期是否正确
+
+#### ⏰ 定时任务监控
+
+**定时任务配置**：
+- **执行频率**: 每小时一次 (`0 * * * *`)
+- **下次执行**: 可在 Cloudflare Dashboard 的 Workers → Cron Triggers 中查看
+
+**手动测试定时任务**：
+```bash
+# 查看定时任务状态
+wrangler tail
+
+# 手动触发定时任务效果
+curl -X POST https://your-worker.workers.dev/monitor
+```
+
 #### 查看实时日志
 
 ```bash
@@ -323,8 +541,8 @@ https://site-bot.your-subdomain.workers.dev/api/status
    - 确认 KV 命名空间 ID 是否正确
 
 2. **"配置验证失败"**
-   - 确保 `TELEGRAM_BOT_TOKEN` 和 `TELEGRAM_TARGET_CHAT` 已设置
-   - 检查 Token 格式是否正确
+   - 确保至少配置了一个通知渠道（Telegram、Discord、飞书或Gmail）
+   - 检查 Token 和 Webhook URL 格式是否正确
 
 3. **"KV 存储错误"**
    - 确认 KV 命名空间已创建
@@ -333,6 +551,17 @@ https://site-bot.your-subdomain.workers.dev/api/status
 4. **"定时任务不执行"**
    - 检查 cron 表达式：`"0 * * * *"` (每小时执行)
    - 确认 Workers 已正确部署
+
+5. **"飞书通知失败"**
+   - 检查 Webhook URL 是否正确
+   - 确认飞书机器人是否已添加到群组
+   - 如果启用了签名校验，检查 `FEISHU_SECRET` 是否正确
+   - 关闭签名校验可解决大部分问题
+
+6. **"递归解析失败"**
+   - 检查 sitemap URL 是否可访问
+   - 确认网站的 robots.txt 允许访问 sitemap
+   - 查看 Workers 日志了解具体错误信息
 
 #### 调试步骤
 
