@@ -1,11 +1,17 @@
 # Site Bot - 网站监控机器人
 
-一个基于 Cloudflare Workers 的智能网站监控机器人，自动监控多个网站的 sitemap 变化，并通过 飞书/Telegram/Discord 推送更新通知。
+一个基于 Cloudflare Workers 的智能网站监控机器人，提供**双重监控**功能：
+- 🗺️ **Sitemap监控**：自动检测网站sitemap变化，发现新发布内容
+- 🔍 **Google收录监控**：基于Serper.dev API，监控过去24小时Google新收录页面
+
+通过 飞书/Telegram/Discord/Gmail 多渠道推送更新通知，帮您全面掌握网站内容发布和收录状态。
 
 ## 🎯 项目特色
 
 - **零成本部署**：基于 Cloudflare Workers，完全免费
+- **双重监控**：Sitemap监控 + Google搜索收录监控，全面覆盖
 - **智能监控**：自动检测 sitemap 变化，支持 .gz 压缩文件
+- **Google收录监控**：基于Serper.dev API，监控过去24小时新收录页面
 - **递归解析**：自动处理嵌套 sitemap 索引，获取所有实际内容 URL
 - **静默模式**：只在有更新时发送通知，避免消息轰炸
 - **多平台支持**：支持 Telegram、Discord、Gmail、飞书四种通知渠道
@@ -46,11 +52,21 @@
 
 ### 🔍 核心功能
 
-#### 1. 自动监控
+#### 1. 双重监控系统
+
+**🗺️ Sitemap 监控**：
 - **定时检查**：每小时自动检查所有配置的 sitemap
 - **变化检测**：对比新旧 sitemap，识别新增的 URL
 - **智能解析**：支持 XML 和 HTML 格式的 sitemap
 - **压缩支持**：自动处理 .gz 压缩的 sitemap 文件
+- **递归解析**：自动处理嵌套 sitemap 索引，获取所有实际内容 URL
+
+**🔍 Google 收录监控**：
+- **实时检测**：基于 Serper.dev API，检测过去24小时Google新收录页面
+- **site: 搜索**：使用 `site:域名` 操作符精准搜索
+- **时间过滤**：支持 `tbs=qdr:d` 过滤过去24小时结果
+- **智能去重**：只通知新发现的收录页面，避免重复
+- **成本极低**：免费2500次查询，比SerpApi便宜50倍
 
 #### 2. 消息推送策略
 
@@ -60,10 +76,11 @@
 - 📊 **汇总报告**：所有更新完成后发送关键词汇总
 
 **消息类型**：
-1. **更新通知**：包含域名、新增数量、sitemap 文件、URL 列表
-2. **关键词汇总**：分析新增内容的主题关键词
-3. **命令响应**：用户交互的反馈信息
-4. **错误通知**：配置错误或网络问题的提示
+1. **Sitemap更新通知**：包含域名、新增数量、sitemap 文件、URL 列表
+2. **Google收录通知**：包含域名、新收录页面数量、标题、链接、摘要
+3. **关键词汇总**：分析新增内容的主题关键词
+4. **命令响应**：用户交互的反馈信息
+5. **错误通知**：配置错误或网络问题的提示
 
 #### 3. 支持的命令
 
@@ -105,6 +122,13 @@ GET /api/status
 ```
 POST /api/feeds/add     - 添加 sitemap 监控
 POST /api/feeds/remove  - 删除 sitemap 监控
+```
+
+**Google 搜索监控**：
+```
+POST /api/google-search/add     - 添加 Google 搜索域名监控
+POST /api/google-search/remove  - 删除 Google 搜索域名监控
+POST /api/google-search/execute - 手动执行 Google 搜索监控
 ```
 
 **通知测试**：
@@ -308,6 +332,10 @@ wrangler secret put FEISHU_WEBHOOK
 wrangler secret put GMAIL_USER
 wrangler secret put GMAIL_PASSWORD
 wrangler secret put GMAIL_TO
+
+# 设置 Serper.dev API Key (Google搜索监控，可选)
+wrangler secret put SERPER_API_KEY
+# 输入你的 Serper.dev API Key (免费2500次查询)
 ```
 
 **获取 TELEGRAM_TARGET_CHAT 的方法**：
@@ -316,7 +344,7 @@ wrangler secret put GMAIL_TO
 2. **用户 ID**：使用 @userinfobot 获取你的用户 ID
 3. **频道 ID**：将机器人添加到频道，使用 @userinfobot 获取频道 ID
 
-**获取 Bot Token 的方法**：
+**获取各种Token和密钥的方法**：
 
 **Telegram**：
 1. 在 Telegram 中找到 @BotFather
@@ -337,6 +365,15 @@ wrangler secret put GMAIL_TO
    wrangler secret put FEISHU_SECRET
    # 输入签名密钥
    ```
+
+**Serper.dev API Key** (Google搜索监控)：
+1. 访问 [Serper.dev](https://serper.dev)
+2. 注册账户（**免费获得2500次查询额度**）
+3. 在 Dashboard 中复制 API Key
+4. 成本对比：
+   - **Serper.dev**: $0.30/1000次（免费2500次）
+   - SerpApi: $15/1000次（免费100次/月）
+   - **节省成本50倍！**
 
 #### 步骤 7: 配置 Webhook
 
@@ -453,6 +490,8 @@ wrangler secret delete TELEGRAM_BOT_TOKEN
 
 #### 🧪 监控功能测试
 
+**🗺️ Sitemap 监控测试**
+
 **1. 添加 sitemap 监控**：
 ```javascript
 // 在浏览器控制台中运行
@@ -466,38 +505,72 @@ fetch('/api/feeds/add', {
 .then(res => res.json())
 .then(data => {
   console.log('添加结果:', data);
-  alert('监控添加完成！');
+  alert('Sitemap监控添加完成！');
 });
 ```
 
-**2. 手动触发监控任务**：
+**2. 手动触发 sitemap 监控**：
 ```javascript
-// 立即执行一次监控检查
+// 立即执行一次 sitemap 监控检查
 fetch('/monitor', {
   method: 'POST'
 })
 .then(res => res.json())
 .then(data => {
-  console.log('监控任务结果:', data);
-  alert('监控完成！检查飞书是否收到通知');
+  console.log('Sitemap监控结果:', data);
+  alert('Sitemap监控完成！检查是否收到通知');
 });
 ```
 
-**3. 查看监控状态**：
+**🔍 Google 搜索监控测试**
+
+**3. 添加 Google 搜索监控**：
+```javascript
+// 添加域名到 Google 搜索监控
+fetch('/api/google-search/add', {
+  method: 'POST',
+  headers: {'Content-Type': 'application/json'},
+  body: JSON.stringify({
+    domain: 'example.com'  // 只需域名，不包含 https://
+  })
+})
+.then(res => res.json())
+.then(data => {
+  console.log('Google搜索监控添加结果:', data);
+  alert('Google搜索监控添加完成！');
+});
+```
+
+**4. 手动触发 Google 搜索监控**：
+```javascript
+// 立即执行一次 Google 搜索监控
+fetch('/api/google-search/execute', {
+  method: 'POST'
+})
+.then(res => res.json())
+.then(data => {
+  console.log('Google搜索监控结果:', data);
+  alert('Google搜索监控完成！检查是否收到新收录通知');
+});
+```
+
+**5. 查看完整监控状态**：
 ```javascript
 // 查看当前所有监控的网站和状态
 fetch('/api/status')
 .then(res => res.json())
 .then(data => {
   console.log('当前监控状态:', data);
-  console.log('监控的网站:', data.feeds);
+  console.log('Sitemap监控网站:', data.feeds);
+  console.log('Google搜索监控域名:', data.google_search_domains);
+  console.log('Google搜索状态:', data.google_search_status);
   console.log('启用的通知渠道:', data.enabled_channels);
 });
 ```
 
-**4. 删除 sitemap 监控**：
+**6. 删除监控（可选）**：
 ```javascript
-// 删除指定的监控
+// 删除 sitemap 监控
 fetch('/api/feeds/remove', {
   method: 'POST',
   headers: {'Content-Type': 'application/json'},
@@ -506,9 +579,18 @@ fetch('/api/feeds/remove', {
   })
 })
 .then(res => res.json())
-.then(data => {
-  console.log('删除结果:', data);
-});
+.then(data => console.log('Sitemap删除结果:', data));
+
+// 删除 Google 搜索监控
+fetch('/api/google-search/remove', {
+  method: 'POST',
+  headers: {'Content-Type': 'application/json'},
+  body: JSON.stringify({
+    domain: 'example.com'
+  })
+})
+.then(res => res.json())
+.then(data => console.log('Google搜索监控删除结果:', data));
 ```
 
 #### 🔍 KV 数据库监控
@@ -520,23 +602,34 @@ fetch('/api/feeds/remove', {
 4. 查看存储的数据结构
 
 **关键数据项检查**：
-- `rss_feeds`: 确认监控列表是否正确
+
+**Sitemap 监控相关**：
+- `rss_feeds`: 确认 sitemap 监控列表是否正确
 - `sitemap_current_域名`: 检查最新内容是否为实际URL而非sitemap索引
 - `last_update_域名`: 确认更新日期是否正确
+
+**Google 搜索监控相关**：
+- `google_search_domains`: 确认 Google 搜索监控的域名列表
+- `google_search_域名`: 检查搜索历史记录
+- `google_search_last_check_域名`: 确认最后检查时间
 
 #### ⏰ 定时任务监控
 
 **定时任务配置**：
-- **执行频率**: 每小时一次 (`0 * * * *`)
+- **Sitemap 监控**: 每小时自动执行一次 (`0 * * * *`)
+- **Google 搜索监控**: 需要手动执行或在 n8n 中配置
 - **下次执行**: 可在 Cloudflare Dashboard 的 Workers → Cron Triggers 中查看
 
-**手动测试定时任务**：
+**手动测试监控任务**：
 ```bash
-# 查看定时任务状态
+# 查看实时日志
 wrangler tail
 
-# 手动触发定时任务效果
+# 手动触发 sitemap 监控
 curl -X POST https://your-worker.workers.dev/monitor
+
+# 手动触发 Google 搜索监控
+curl -X POST https://your-worker.workers.dev/api/google-search/execute
 ```
 
 #### 查看实时日志
@@ -697,4 +790,101 @@ flowchart LR
 > * **监控列表** 与 Google&nbsp;Sheet 保持同步。
 > * 只有完成列表同步后才执行一次完整的 sitemap 监控，避免重复调用。
 
-如需进一步在 `/monitor` 之后接入 AI 过滤、飞书推送等，只需在图中的 **B1** 节点后串联相应节点即可。 
+如需进一步在 `/monitor` 之后接入 AI 过滤、飞书推送等，只需在图中的 **B1** 节点后串联相应节点即可。
+
+## 🔍 Google 搜索收录监控功能 🆕
+
+### 🎯 功能亮点
+
+本项目除了传统的 Sitemap 监控外，还新增了 **Google 搜索收录监控**功能，为您提供双重保障：
+
+| 监控类型 | 监控内容 | 触发条件 | 适用场景 |
+|---------|----------|----------|----------|
+| 🗺️ **Sitemap 监控** | 网站 sitemap 文件变化 | 网站发布新内容 | 第一时间发现内容发布 |
+| 🔍 **Google 收录监控** | Google 搜索结果 | Google 收录新页面 | 确认内容被搜索引擎收录 |
+
+### 💰 成本优势
+
+我们选择了性价比最高的 **Serper.dev API**：
+
+| 对比项 | Serper.dev | SerpApi | 优势 |
+|--------|------------|---------|------|
+| 🆓 **免费额度** | **2500次查询** | 100次/月 | **25倍更多** |
+| 💵 **付费价格** | **$0.30/1000次** | $15/1000次 | **便宜50倍** |
+| ⚡ **响应速度** | 1-2秒 | 1-3秒 | 相当 |
+| 🎯 **功能支持** | 完整 | 完整 | 相同 |
+
+### 🚀 快速配置
+
+**第一步：获取免费 API 密钥**
+```bash
+# 1. 访问 https://serper.dev 注册（无需信用卡）
+# 2. 获得免费 2500 次查询额度
+# 3. 复制 API Key 并设置：
+wrangler secret put SERPER_API_KEY
+```
+
+**第二步：添加监控域名**
+```bash
+curl -X POST "https://your-worker.workers.dev/api/google-search/add" \
+  -H "Content-Type: application/json" \
+  -d '{"domain": "your-domain.com"}'
+```
+
+**第三步：执行监控测试**
+```bash
+curl -X POST "https://your-worker.workers.dev/api/google-search/execute"
+```
+
+### 📱 通知效果预览
+
+当发现新的 Google 收录页面时，您会收到这样的通知：
+
+```
+🔍 Google 搜索监控更新
+
+域名: pollo.ai
+新收录页面: 3 个
+检查时间: 2025-01-06 18:30:00
+
+新收录的页面:
+1. [AI Kitty Plane Video Generator](https://pollo.ai/ai-kitty-plane)
+   Just upload an image of any cat and it can create a video...
+
+2. [40+ AI-effecten voor video's](https://pollo.ai/video-effects)
+   Ontdek meer dan 40 gratis AI-video-effecten...
+
+3. [probeer de naadloze textuurgenerator gratis](https://pollo.ai/ai-image-generator)
+   Onze naadloze textuurgenerator creërt textuurafbeeldingen...
+```
+
+### 🔧 独立监控设计
+
+- **✅ 完全独立**：Google 搜索监控与 Sitemap 监控互不干扰
+- **✅ n8n 兼容**：现有工作流无需任何修改
+- **✅ 按需启用**：不想用就不配置，不影响现有功能
+- **✅ 灵活控制**：可单独管理监控域名和执行时机
+
+### 📚 完整文档
+
+详细配置指南：[**GOOGLE_SEARCH_SETUP.md**](./GOOGLE_SEARCH_SETUP.md)
+
+包含完整的：
+- 🔧 配置步骤指南
+- 📋 API 接口文档  
+- 🧪 测试验证方法
+- 🔍 故障排除指南
+- 💡 最佳实践建议
+
+---
+
+## 🎉 双重监控，全面覆盖
+
+**🚀 现在您拥有了业界最完整的网站监控解决方案：**
+
+1. **📝 内容发布监控** - Sitemap 变化 → 第一时间发现新内容
+2. **🔍 收录状态监控** - Google 搜索结果 → 确认搜索引擎收录情况  
+3. **💰 成本极低** - 免费额度 + 超低价格 → 长期可持续使用
+4. **🔔 多渠道通知** - 飞书/Telegram/Discord/Gmail → 不错过任何更新
+
+**从内容发布到搜索收录，一站式监控，让您的网站运营更加高效！** 

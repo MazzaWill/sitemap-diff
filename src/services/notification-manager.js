@@ -120,6 +120,62 @@ export class NotificationManager {
   }
 
   /**
+   * 发送Google搜索监控通知
+   * @param {string} message - 格式化的通知消息
+   * @param {string} level - 消息级别 (info, warning, error)
+   * @returns {Promise<Object>} 发送结果统计
+   */
+  async sendNotification(message, level = 'info') {
+    const results = {
+      total: 0,
+      success: 0,
+      failed: 0,
+      channels: {}
+    };
+
+    console.log(`发送Google搜索监控通知: ${level}`);
+
+    // 并行发送到所有启用的渠道
+    const promises = [];
+
+    if (feishuConfig.enabled) {
+      promises.push(
+        this.sendWithErrorHandling(
+          'feishu',
+          () => sendSystemStatusFeishu(message, level),
+          results
+        )
+      );
+    }
+
+    if (telegramConfig.enabled) {
+      promises.push(
+        this.sendWithErrorHandling(
+          'telegram',
+          () => this.sendTelegramGoogleSearchUpdate(message),
+          results
+        )
+      );
+    }
+
+    if (gmailConfig.enabled) {
+      promises.push(
+        this.sendWithErrorHandling(
+          'gmail',
+          () => this.sendGmailGoogleSearchUpdate(message),
+          results
+        )
+      );
+    }
+
+    // 等待所有发送完成
+    await Promise.all(promises);
+
+    console.log(`Google搜索监控通知发送完成: ${results.success}/${results.total} 成功`);
+    return results;
+  }
+
+  /**
    * 发送关键词汇总到所有启用的渠道
    * @param {string[]} allNewUrls - 所有新增的 URL 列表
    * @returns {Promise<Object>} 发送结果统计
@@ -358,6 +414,51 @@ export class NotificationManager {
     `;
     
     const textContent = `Site Bot 测试消息\\n\\n时间: ${new Date().toLocaleString('zh-CN')}\\n状态: 正常运行\\n\\n这是一条测试消息，用于验证邮件通知渠道是否正常工作。`;
+    
+    await sendEmail(gmailConfig.to, subject, htmlContent, textContent);
+  }
+
+  /**
+   * 发送 Telegram Google搜索更新消息
+   * @param {string} message - 消息内容
+   * @returns {Promise<void>}
+   */
+  async sendTelegramGoogleSearchUpdate(message) {
+    const { sendMessage } = await import('../apps/telegram-bot.js');
+    
+    const formattedMessage = message.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
+    await sendMessage(telegramConfig.targetChat, formattedMessage);
+  }
+
+  /**
+   * 发送 Gmail Google搜索更新消息
+   * @param {string} message - 消息内容
+   * @returns {Promise<void>}
+   */
+  async sendGmailGoogleSearchUpdate(message) {
+    const { sendEmail } = await import('../apps/gmail-sender.js');
+    
+    const subject = '🔍 Google搜索监控更新';
+    
+    // 将Markdown格式转换为HTML
+    const htmlContent = `
+      <html>
+        <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <h2 style="color: #2c3e50;">🔍 Google搜索监控更新</h2>
+          <div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px;">
+            ${message
+              .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+              .replace(/\n/g, '<br>')
+              .replace(/\[([^\]]+)\]\(([^\)]+)\)/g, '<a href="$2">$1</a>')
+            }
+          </div>
+        </body>
+      </html>
+    `;
+    
+    const textContent = message
+      .replace(/\*\*(.*?)\*\*/g, '$1')
+      .replace(/\[([^\]]+)\]\(([^\)]+)\)/g, '$1 ($2)');
     
     await sendEmail(gmailConfig.to, subject, htmlContent, textContent);
   }

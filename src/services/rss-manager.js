@@ -4,7 +4,7 @@
  * 使用 Cloudflare KV 存储替代文件系统
  */
 
-import { parseXML, extractURLs, getAllContentURLs, isSitemapIndex } from './xml-parser.js';
+import { extractURLs, getAllContentURLs } from './xml-parser.js';
 
 export class RSSManager {
   constructor(kvStorage) {
@@ -266,4 +266,5 @@ export class RSSManager {
       return null;
     }
   }
+
 } 

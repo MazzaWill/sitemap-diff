@@ -7,9 +7,11 @@ import { initConfig, validateConfig } from './config.js';
 import { RSSManager } from './services/rss-manager.js';
 import { notificationManager } from './services/notification-manager.js';
 import { handleDiscordInteraction } from './apps/discord-bot.js';
+import GoogleSearchMonitor from './services/google-search-monitor.js';
 
 // 全局变量
 let rssManager = null;
+let googleSearchMonitor = null;
 
 /**
  * 初始化应用
@@ -28,8 +30,16 @@ function initializeApp(env) {
     throw new Error(`配置错误: ${validation.errors.join(', ')}`);
   }
 
-  // 初始化 RSS 管理器
+  // 初始化存储和服务
   if (env.SITEMAP_STORAGE) {
+    // 初始化 Google 搜索监控器
+    googleSearchMonitor = new GoogleSearchMonitor(env.SITEMAP_STORAGE, notificationManager);
+    googleSearchMonitor.initialize({
+      SERPER_API_KEY: env.SERPER_API_KEY
+    });
+    console.log('✅ Google 搜索监控器初始化成功');
+
+    // 初始化 RSS 管理器
     rssManager = new RSSManager(env.SITEMAP_STORAGE);
     console.log('✅ RSS 管理器初始化成功');
   } else {
@@ -40,7 +50,7 @@ function initializeApp(env) {
 }
 
 /**
- * 执行定时监控任务
+ * 执行定时监控任务（只执行sitemap监控，保持原有逻辑）
  * @param {Object} env - 环境变量
  */
 async function performScheduledMonitoring(env) {
@@ -169,10 +179,15 @@ async function handleRequest(request, env, ctx) {
     // API 状态
     if (path === '/api/status') {
       const feeds = rssManager ? await rssManager.getFeeds() : [];
+      const googleDomains = googleSearchMonitor ? await googleSearchMonitor.getMonitoredDomains() : [];
+      const googleStatus = googleSearchMonitor ? await googleSearchMonitor.getMonitoringStatus() : { enabled: false };
       const channelStatus = notificationManager.getChannelStatus();
+      
       return new Response(JSON.stringify({
         status: 'running',
-        feeds: feeds,
+        feeds: feeds,  // 保持原有字段名，确保n8n兼容性
+        google_search_domains: googleDomains,  // 新增字段
+        google_search_status: googleStatus,    // 新增字段
         notification_channels: channelStatus,
         enabled_channels: notificationManager.enabledChannels,
         timestamp: new Date().toISOString()
@@ -260,15 +275,80 @@ async function handleRequest(request, env, ctx) {
       });
     }
 
+    // Google搜索监控 - 添加域名
+    if (path === '/api/google-search/add' && request.method === 'POST') {
+      const { domain } = await request.json();
+      
+      if (!domain) {
+        return new Response(JSON.stringify({
+          status: 'error',
+          message: '缺少 domain 参数'
+        }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const result = await googleSearchMonitor.addDomain(domain);
+      
+      return new Response(JSON.stringify({
+        status: result.success ? 'success' : 'error',
+        message: result.message,
+        timestamp: new Date().toISOString()
+      }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // Google搜索监控 - 删除域名
+    if (path === '/api/google-search/remove' && request.method === 'POST') {
+      const { domain } = await request.json();
+      
+      if (!domain) {
+        return new Response(JSON.stringify({
+          status: 'error',
+          message: '缺少 domain 参数'
+        }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const result = await googleSearchMonitor.removeDomain(domain);
+      
+      return new Response(JSON.stringify({
+        status: result.success ? 'success' : 'error',
+        message: result.message,
+        timestamp: new Date().toISOString()
+      }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // Google搜索监控 - 手动执行
+    if (path === '/api/google-search/execute' && request.method === 'POST') {
+      ctx.waitUntil(googleSearchMonitor.executeMonitoring());
+      return new Response(JSON.stringify({
+        status: 'success',
+        message: 'Google搜索监控任务已启动',
+        timestamp: new Date().toISOString()
+      }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
     // 默认响应
     return new Response(JSON.stringify({
       message: 'Site Bot API',
       endpoints: [
         '/health - 健康检查',
-        '/monitor - 手动触发监控 (POST)',
+        '/monitor - 手动触发 sitemap 监控 (POST)',
         '/api/status - API 状态',
         '/api/feeds/add - 添加 sitemap 监控 (POST)',
         '/api/feeds/remove - 删除 sitemap 监控 (POST)',
+        '/api/google-search/add - 添加 Google 搜索域名监控 (POST)',
+        '/api/google-search/remove - 删除 Google 搜索域名监控 (POST)',
+        '/api/google-search/execute - 手动执行 Google 搜索监控 (POST)',
         '/test/notification - 测试通知 (POST)',
         '/test/simple - 简单文本测试 (POST)',
         '/webhook/telegram - Telegram Webhook',
@@ -315,7 +395,7 @@ export default {
     return await handleRequest(request, env, ctx);
   },
 
-  // 定时任务触发器
+  // 定时任务触发器（只执行sitemap监控）
   async scheduled(event, env, ctx) {
     console.log('⏰ 收到定时任务触发');
 
@@ -329,7 +409,7 @@ export default {
       }
     }
 
-    // 执行监控任务
+    // 执行sitemap监控任务
     ctx.waitUntil(performScheduledMonitoring(env));
   }
 }; 
