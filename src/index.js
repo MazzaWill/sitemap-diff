@@ -275,50 +275,126 @@ async function handleRequest(request, env, ctx) {
       });
     }
 
-    // Google搜索监控 - 添加域名
+    // Google搜索监控 - 添加域名(支持单个或批量)
     if (path === '/api/google-search/add' && request.method === 'POST') {
-      const { domain } = await request.json();
+      const { domain, domains } = await request.json();
       
-      if (!domain) {
+      // 支持单个域名或域名数组
+      let domainsToAdd = [];
+      if (domain) {
+        domainsToAdd = [domain];
+      } else if (domains && Array.isArray(domains)) {
+        domainsToAdd = domains;
+      } else {
         return new Response(JSON.stringify({
           status: 'error',
-          message: '缺少 domain 参数'
+          message: '缺少 domain 参数或 domains 数组'
         }), {
           status: 400,
           headers: { 'Content-Type': 'application/json' }
         });
       }
 
-      const result = await googleSearchMonitor.addDomain(domain);
+      // 批量处理，每个域名之间添加延迟
+      const results = [];
+      for (let i = 0; i < domainsToAdd.length; i++) {
+        const currentDomain = domainsToAdd[i];
+        try {
+          const result = await googleSearchMonitor.addDomain(currentDomain);
+          results.push({
+            domain: currentDomain,
+            success: result.success,
+            message: result.message
+          });
+          
+          // 添加延迟避免并发冲突（除了最后一个）
+          if (i < domainsToAdd.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 300));
+          }
+        } catch (error) {
+          results.push({
+            domain: currentDomain,
+            success: false,
+            message: error.message
+          });
+        }
+      }
+
+      const successCount = results.filter(r => r.success).length;
+      const totalCount = results.length;
       
       return new Response(JSON.stringify({
-        status: result.success ? 'success' : 'error',
-        message: result.message,
+        status: successCount === totalCount ? 'success' : 'partial',
+        message: `${successCount}/${totalCount} 个域名添加成功`,
+        results: results,
+        summary: {
+          total: totalCount,
+          success: successCount,
+          failed: totalCount - successCount
+        },
         timestamp: new Date().toISOString()
       }), {
         headers: { 'Content-Type': 'application/json' }
       });
     }
 
-    // Google搜索监控 - 删除域名
+    // Google搜索监控 - 删除域名(支持单个或批量)
     if (path === '/api/google-search/remove' && request.method === 'POST') {
-      const { domain } = await request.json();
+      const { domain, domains } = await request.json();
       
-      if (!domain) {
+      // 支持单个域名或域名数组
+      let domainsToRemove = [];
+      if (domain) {
+        domainsToRemove = [domain];
+      } else if (domains && Array.isArray(domains)) {
+        domainsToRemove = domains;
+      } else {
         return new Response(JSON.stringify({
           status: 'error',
-          message: '缺少 domain 参数'
+          message: '缺少 domain 参数或 domains 数组'
         }), {
           status: 400,
           headers: { 'Content-Type': 'application/json' }
         });
       }
 
-      const result = await googleSearchMonitor.removeDomain(domain);
+      // 批量处理，每个域名之间添加延迟
+      const results = [];
+      for (let i = 0; i < domainsToRemove.length; i++) {
+        const currentDomain = domainsToRemove[i];
+        try {
+          const result = await googleSearchMonitor.removeDomain(currentDomain);
+          results.push({
+            domain: currentDomain,
+            success: result.success,
+            message: result.message
+          });
+          
+          // 添加延迟避免并发冲突（除了最后一个）
+          if (i < domainsToRemove.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 300));
+          }
+        } catch (error) {
+          results.push({
+            domain: currentDomain,
+            success: false,
+            message: error.message
+          });
+        }
+      }
+
+      const successCount = results.filter(r => r.success).length;
+      const totalCount = results.length;
       
       return new Response(JSON.stringify({
-        status: result.success ? 'success' : 'error',
-        message: result.message,
+        status: successCount === totalCount ? 'success' : 'partial',
+        message: `${successCount}/${totalCount} 个域名删除成功`,
+        results: results,
+        summary: {
+          total: totalCount,
+          success: successCount,
+          failed: totalCount - successCount
+        },
         timestamp: new Date().toISOString()
       }), {
         headers: { 'Content-Type': 'application/json' }
@@ -337,6 +413,14 @@ async function handleRequest(request, env, ctx) {
       });
     }
 
+    // Google搜索监控 - 获取状态
+    if (path === '/api/google-search/status' && request.method === 'GET') {
+      const status = await googleSearchMonitor.getMonitoringStatus();
+      return new Response(JSON.stringify(status), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
     // 默认响应
     return new Response(JSON.stringify({
       message: 'Site Bot API',
@@ -349,6 +433,7 @@ async function handleRequest(request, env, ctx) {
         '/api/google-search/add - 添加 Google 搜索域名监控 (POST)',
         '/api/google-search/remove - 删除 Google 搜索域名监控 (POST)',
         '/api/google-search/execute - 手动执行 Google 搜索监控 (POST)',
+        '/api/google-search/status - 获取 Google 搜索监控状态 (GET)',
         '/test/notification - 测试通知 (POST)',
         '/test/simple - 简单文本测试 (POST)',
         '/webhook/telegram - Telegram Webhook',
@@ -412,4 +497,12 @@ export default {
     // 执行sitemap监控任务
     ctx.waitUntil(performScheduledMonitoring(env));
   }
-}; 
+};
+
+// 临时添加空的 DO 类以进行迁移
+export class DomainListDO {
+	constructor(state, env) {}
+	fetch(request) {
+		return new Response('This DO is deprecated and being removed.', { status: 410 });
+	}
+} 

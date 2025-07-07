@@ -48,7 +48,7 @@ class GoogleSearchMonitor {
     }
 
     /**
-     * 添加域名到Google搜索监控
+     * 添加域名到Google搜索监控（原子操作，避免并发竞争）
      */
     async addDomain(domain) {
         try {
@@ -57,18 +57,39 @@ class GoogleSearchMonitor {
                 throw new Error('Invalid domain format');
             }
 
-            const domains = await this.getMonitoredDomains();
-            
-            // 检查是否已存在
-            if (domains.includes(domain)) {
-                return { success: false, message: 'Domain already monitored' };
-            }
+            // 使用重试机制处理并发冲突
+            const maxRetries = 5;
+            for (let attempt = 0; attempt < maxRetries; attempt++) {
+                try {
+                    const domains = await this.getMonitoredDomains();
+                    
+                    // 检查是否已存在
+                    if (domains.includes(domain)) {
+                        return { success: false, message: 'Domain already monitored' };
+                    }
 
-            domains.push(domain);
-            await this.storage.put('google_search_domains', JSON.stringify(domains));
+                    // 创建新的域名列表
+                    const newDomains = [...domains, domain];
+                    
+                    // 原子写入操作
+                    await this.storage.put('google_search_domains', JSON.stringify(newDomains));
+                    
+                    console.log(`Added domain to Google search monitoring: ${domain} (attempt ${attempt + 1})`);
+                    return { success: true, message: 'Domain added successfully' };
+                    
+                } catch (writeError) {
+                    console.warn(`Write conflict on attempt ${attempt + 1} for domain ${domain}:`, writeError);
+                    
+                    // 如果是最后一次尝试，抛出错误
+                    if (attempt === maxRetries - 1) {
+                        throw writeError;
+                    }
+                    
+                    // 随机延迟后重试，避免多个请求同时重试
+                    await this.delay(Math.random() * 100 + 50);
+                }
+            }
             
-            console.log(`Added domain to Google search monitoring: ${domain}`);
-            return { success: true, message: 'Domain added successfully' };
         } catch (error) {
             console.error('Failed to add domain:', error);
             return { success: false, message: error.message };
@@ -76,27 +97,63 @@ class GoogleSearchMonitor {
     }
 
     /**
-     * 从Google搜索监控中移除域名
+     * 从Google搜索监控中移除域名（原子操作，避免并发竞争）
      */
     async removeDomain(domain) {
         try {
-            const domains = await this.getMonitoredDomains();
-            const index = domains.indexOf(domain);
-            
-            if (index === -1) {
-                return { success: false, message: 'Domain not found in monitoring list' };
-            }
+            // 使用重试机制处理并发冲突
+            const maxRetries = 10;
+            for (let attempt = 0; attempt < maxRetries; attempt++) {
+                try {
+                    const originalDomains = await this.getMonitoredDomains();
+                    const index = originalDomains.indexOf(domain);
+                    
+                    if (index === -1) {
+                        // 检查是否已经被其他请求删除了
+                        console.log(`Domain ${domain} not found, may have been removed by concurrent request`);
+                        return { success: true, message: 'Domain already removed' };
+                    }
 
-            domains.splice(index, 1);
-            await this.storage.put('google_search_domains', JSON.stringify(domains));
+                    // 创建新的域名列表（不修改原数组）
+                    const newDomains = originalDomains.filter(d => d !== domain);
+                    
+                    // 验证操作的有效性
+                    if (newDomains.length >= originalDomains.length) {
+                        throw new Error('Invalid remove operation: new list not smaller');
+                    }
+                    
+                    // 原子写入操作
+                    await this.storage.put('google_search_domains', JSON.stringify(newDomains));
+                    
+                    // 验证写入是否成功
+                    const verifyDomains = await this.getMonitoredDomains();
+                    if (verifyDomains.includes(domain)) {
+                        throw new Error('Write verification failed: domain still exists');
+                    }
+                    
+                    // 清理相关存储数据
+                    await this.cleanupDomainData(domain);
+                    
+                    console.log(`Successfully removed domain from Google search monitoring: ${domain} (attempt ${attempt + 1})`);
+                    console.log(`Before: ${originalDomains.length} domains, After: ${newDomains.length} domains`);
+                    return { success: true, message: 'Domain removed successfully' };
+                    
+                } catch (writeError) {
+                    console.warn(`Write conflict on attempt ${attempt + 1} for domain removal ${domain}:`, writeError.message);
+                    
+                    // 如果是最后一次尝试，抛出错误
+                    if (attempt === maxRetries - 1) {
+                        throw writeError;
+                    }
+                    
+                    // 指数退避延迟，减少并发冲突
+                    const backoffDelay = Math.min(1000, 50 * Math.pow(2, attempt)) + Math.random() * 100;
+                    await this.delay(backoffDelay);
+                }
+            }
             
-            // 清理相关存储数据
-            await this.cleanupDomainData(domain);
-            
-            console.log(`Removed domain from Google search monitoring: ${domain}`);
-            return { success: true, message: 'Domain removed successfully' };
         } catch (error) {
-            console.error('Failed to remove domain:', error);
+            console.error('Failed to remove domain after all retries:', error);
             return { success: false, message: error.message };
         }
     }

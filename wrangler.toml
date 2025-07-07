@@ -22,4 +22,13 @@ name = "site-bot-prod"
 
 # 开发环境配置
 [env.staging]
-name = "site-bot-staging" 
+name = "site-bot-staging"
+
+# 临时添加 DO 绑定以运行迁移
+[[durable_objects.bindings]]
+name = "DOMAIN_LIST_DO" # 此绑定名称是迁移所必需的
+class_name = "DomainListDO"
+
+[[migrations]]
+tag = "v1" # or any other tag
+delete_classes = ["DomainListDO"] 
