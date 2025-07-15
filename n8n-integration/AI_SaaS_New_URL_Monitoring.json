@@ -1,0 +1,964 @@
+{
+  "createdAt": "2025-07-04T07:47:14.181Z",
+  "updatedAt": "2025-07-08T00:45:52.000Z",
+  "id": "WORKFLOW_ID_PLACEHOLDER",
+  "name": "AI SaaS New URL Monitoring",
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "triggerTimes": {
+          "item": [
+            {
+              "mode": "=custom",
+              "cronExpression": "0 */2 * * *"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.cron",
+      "position": [-1540, -760],
+      "name": "每2小时触发",
+      "id": "4de805c4-0275-4323-a60b-d8f0769eea7d",
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "GOOGLE_SHEETS_DOCUMENT_ID_PLACEHOLDER",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "sitemap-config",
+          "mode": "name"
+        },
+        "combineFilters": "OR",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [-1340, -760],
+      "name": "读取Sheet配置",
+      "id": "b15e50c7-a277-44ef-98c9-ca8c1d12e875",
+      "typeVersion": 4.6,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "GOOGLE_SHEETS_CREDENTIAL_ID_PLACEHOLDER",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "\n\n# 一、判断是否有新增URL\n\n### 如果有新增URL则调用sitemap 监控微服务API  /api/feeds/add",
+        "height": 660,
+        "width": 940,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [-1600, -1000],
+      "typeVersion": 1,
+      "id": "d69bb3eb-2fbd-4ae8-bd17-748087d18b5b",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "\n\n# 二、更新sitemap监控状态\n\n### 将新增网站字段status的状态改为active，将删除网站字段status状态改为inactive",
+        "height": 760,
+        "width": 1120
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [-600, -1480],
+      "typeVersion": 1,
+      "id": "a0cd45aa-aca5-464e-8298-ce875be29e4e",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://YOUR_DOMAIN.workers.dev/api/feeds/remove",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "=        {\n          \"url\": \"{{ $json.sitemap_url }}\"\n        }",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-260, -1100],
+      "id": "cc9ec914-b441-44e3-9267-5e68e27adebf",
+      "name": "删除监控网站"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "8369713b-7f9b-40f7-86c0-f072e0ceeea3",
+              "leftValue": "={{ $json['sitemap_remove（yes：删除）'] }}",
+              "rightValue": "yes",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [-520, -1100],
+      "id": "8cc3b6d5-6a48-4fbe-9dac-415b1a6c4bc7",
+      "name": "If判断是否有删除sitemap"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "3f4292f2-7068-4fb9-9732-402b07cda10f",
+              "leftValue": "={{ $json['status(y：新增；active：已添加；inactive:已删除)'] }}",
+              "rightValue": "y",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [-520, -1300],
+      "id": "8d2a2d3e-41e5-43eb-8cdb-92dd3dee653a",
+      "name": "If判断是否有新增sitemap"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "642ac8b7-6aba-4cd6-bc71-ff411f740738",
+              "name": "sitemap_url",
+              "value": "={{ $('If判断是否有删除sitemap').item.json.sitemap_url }}",
+              "type": "string"
+            },
+            {
+              "id": "c95cc40f-80c7-456f-a0b3-a3d1bdacc361",
+              "name": "status(y：新增；active：已添加；inactive:已删除)",
+              "value": "inactive",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-20, -1100],
+      "id": "ae36ee5b-0060-49d6-869d-ee2463bdc97e",
+      "name": "将删除的sitemap设置为inactive"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "642ac8b7-6aba-4cd6-bc71-ff411f740738",
+              "name": "sitemap_url",
+              "value": "={{ $('If判断是否有新增sitemap').item.json.sitemap_url }}",
+              "type": "string"
+            },
+            {
+              "id": "c95cc40f-80c7-456f-a0b3-a3d1bdacc361",
+              "name": "status(y：新增；active：已添加；inactive:已删除)",
+              "value": "active",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-20, -1300],
+      "id": "2cfd3624-f2ba-4e60-ad5e-fbabbf5d0c15",
+      "name": "将新增的sitemap设置为active"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "8369713b-7f9b-40f7-86c0-f072e0ceeea3",
+              "leftValue": "={{ $json['site_24_status(y：新增；active：已添加；inactive:已删除)'] }}",
+              "rightValue": "y",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [-520, -480],
+      "id": "0420d5a7-38c4-4907-8713-dd58698b7ddb",
+      "name": "If判断是否有新增Google Search监控"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://YOUR_DOMAIN.workers.dev/api/feeds/add",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "=        {\n          \"url\": \"{{ $json.sitemap_url }}\"\n        }",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-260, -1300],
+      "id": "297f32e8-21c5-455e-a596-9b75728fd8f9",
+      "name": "新增监控网站"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://YOUR_DOMAIN.workers.dev/api/google-search/add",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "=        {\n          \"domain\": \"{{ $('读取Sheet配置').item.json.website_domain }}\"\n        }",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-40, -480],
+      "id": "59d35e03-e71e-4af4-b48a-212de6cd4df3",
+      "name": "新增24收录网站"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "642ac8b7-6aba-4cd6-bc71-ff411f740738",
+              "name": "website_domain",
+              "value": "={{ $('读取Sheet配置').item.json.website_domain }}",
+              "type": "string"
+            },
+            {
+              "id": "c95cc40f-80c7-456f-a0b3-a3d1bdacc361",
+              "name": "site_24_status(y：新增；active：已添加；inactive:已删除)",
+              "value": "active",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [180, -480],
+      "id": "e68dc9f6-0dc8-41fe-9c4a-bd5cd0ff783a",
+      "name": "将新增的domain设置为active"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "GOOGLE_SHEETS_DOCUMENT_ID_PLACEHOLDER",
+          "mode": "list",
+          "cachedResultName": "Sitemap监控数据",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/GOOGLE_SHEETS_DOCUMENT_ID_PLACEHOLDER/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "sitemap-config",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/GOOGLE_SHEETS_DOCUMENT_ID_PLACEHOLDER/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": ["website_domain"],
+          "schema": [
+            {
+              "id": "website_domain",
+              "displayName": "website_domain",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "sitemap_url",
+              "displayName": "sitemap_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status(y：新增；active：已添加；inactive:已删除)",
+              "displayName": "status(y：新增；active：已添加；inactive:已删除)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "sitemap_remove（yes：删除）",
+              "displayName": "sitemap_remove（yes：删除）",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "site_24_status(y：新增；active：已添加；inactive:已删除)",
+              "displayName": "site_24_status(y：新增；active：已添加；inactive:已删除)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "site_24_remove（yes：删除）",
+              "displayName": "site_24_remove（yes：删除）",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "notes",
+              "displayName": "notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "site",
+              "displayName": "site",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [380, -340],
+      "id": "3db38db4-ba3d-4ca6-90a5-81d1267ed35f",
+      "name": "Google site 24 Update Row",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "GOOGLE_SHEETS_CREDENTIAL_ID_PLACEHOLDER",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "GOOGLE_SHEETS_DOCUMENT_ID_PLACEHOLDER",
+          "mode": "list",
+          "cachedResultName": "Sitemap监控数据",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/GOOGLE_SHEETS_DOCUMENT_ID_PLACEHOLDER/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "sitemap-config",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/GOOGLE_SHEETS_DOCUMENT_ID_PLACEHOLDER/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": ["sitemap_url"],
+          "schema": [
+            {
+              "id": "website_domain",
+              "displayName": "website_domain",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "sitemap_url",
+              "displayName": "sitemap_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status(y：新增；active：已添加；inactive:已删除)",
+              "displayName": "status(y：新增；active：已添加；inactive:已删除)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "sitemap_remove（yes：删除）",
+              "displayName": "sitemap_remove（yes：删除）",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "site_24_status(y：新增；active：已添加；inactive:已删除)",
+              "displayName": "site_24_status(y：新增；active：已添加；inactive:已删除)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "site_24_remove（yes：删除）",
+              "displayName": "site_24_remove（yes：删除）",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "notes",
+              "displayName": "notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "site",
+              "displayName": "site",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [280, -1200],
+      "id": "efceb5b6-75fa-46c1-8cce-ad2bdaa46839",
+      "name": "Sitemap Update row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "GOOGLE_SHEETS_CREDENTIAL_ID_PLACEHOLDER",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "8369713b-7f9b-40f7-86c0-f072e0ceeea3",
+              "leftValue": "={{ $json['site_24_remove（yes：删除）'] }}",
+              "rightValue": "yes",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [-520, -180],
+      "id": "1432aff5-c1b3-481b-93b3-384305f5d967",
+      "name": "If判断是否有删除Google Search监控"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://YOUR_DOMAIN.workers.dev/api/google-search/remove",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "=        {\n          \"domain\": \"{{ $('读取Sheet配置').item.json.website_domain }}\"\n        }",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 2000
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-40, -180],
+      "id": "6178603f-ccf0-41ec-99a1-07730978b9d4",
+      "name": "删除24收录网站",
+      "executeOnce": false
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "642ac8b7-6aba-4cd6-bc71-ff411f740738",
+              "name": "website_domain",
+              "value": "={{ $('If判断是否有删除Google Search监控').item.json.website_domain }}",
+              "type": "string"
+            },
+            {
+              "id": "c95cc40f-80c7-456f-a0b3-a3d1bdacc361",
+              "name": "site_24_status(y：新增；active：已添加；inactive:已删除)",
+              "value": "inactive",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [180, -180],
+      "id": "92bab454-d484-4433-a7d0-3ad005fa3dbb",
+      "name": "将删除的domain设置为inactive"
+    },
+    {
+      "parameters": {
+        "content": "# 三、更新Google search 24小时监控状态 \n",
+        "height": 640,
+        "width": 1120,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [-600, -640],
+      "typeVersion": 1,
+      "id": "9e7f0e08-4fe8-431b-b352-0b66619ea55d",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://YOUR_DOMAIN.workers.dev/monitor",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-1340, -540],
+      "id": "fcf3f9e8-6429-4c2c-b0d3-45348062dc92",
+      "name": "执行sitemap监控"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://YOUR_DOMAIN.workers.dev/api/google-search/execute",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-1340, -100],
+      "id": "e5ff48bb-c4ac-4c1b-b0f1-0814005ed380",
+      "name": "执行Google24小时收录监控"
+    },
+    {
+      "parameters": {
+        "amount": 1
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [-260, -180],
+      "id": "c65b5b7f-789f-4b9c-9a1e-57bbf54b2767",
+      "name": "Wait",
+      "webhookId": "WEBHOOK_ID_PLACEHOLDER"
+    },
+    {
+      "parameters": {
+        "amount": 1
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [-260, -480],
+      "id": "1d72a49d-1623-481a-a6cf-d0ce9ba97aaa",
+      "name": "Wait1",
+      "webhookId": "WEBHOOK_ID_PLACEHOLDER"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 24
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-1540, -100],
+      "id": "2c91e383-f43e-4ae8-9b0e-e60a9fe16b1d",
+      "name": "每隔24小时触发"
+    }
+  ],
+  "connections": {
+    "每2小时触发": {
+      "main": [
+        [
+          {
+            "node": "读取Sheet配置",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "执行sitemap监控",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "读取Sheet配置": {
+      "main": [
+        [
+          {
+            "node": "If判断是否有新增sitemap",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "If判断是否有删除sitemap",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "If判断是否有新增Google Search监控",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "If判断是否有删除Google Search监控",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "删除监控网站": {
+      "main": [
+        [
+          {
+            "node": "将删除的sitemap设置为inactive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If判断是否有删除sitemap": {
+      "main": [
+        [
+          {
+            "node": "删除监控网站",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If判断是否有新增sitemap": {
+      "main": [
+        [
+          {
+            "node": "新增监控网站",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "将删除的sitemap设置为inactive": {
+      "main": [
+        [
+          {
+            "node": "Sitemap Update row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "将新增的sitemap设置为active": {
+      "main": [
+        [
+          {
+            "node": "Sitemap Update row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If判断是否有新增Google Search监控": {
+      "main": [
+        [
+          {
+            "node": "Wait1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "新增监控网站": {
+      "main": [
+        [
+          {
+            "node": "将新增的sitemap设置为active",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "新增24收录网站": {
+      "main": [
+        [
+          {
+            "node": "将新增的domain设置为active",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "将新增的domain设置为active": {
+      "main": [
+        [
+          {
+            "node": "Google site 24 Update Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If判断是否有删除Google Search监控": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "删除24收录网站": {
+      "main": [
+        [
+          {
+            "node": "将删除的domain设置为inactive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "将删除的domain设置为inactive": {
+      "main": [
+        [
+          {
+            "node": "Google site 24 Update Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "删除24收录网站",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait1": {
+      "main": [
+        [
+          {
+            "node": "新增24收录网站",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "每隔24小时触发": {
+      "main": [
+        [
+          {
+            "node": "执行Google24小时收录监控",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": {
+    "node:Schedule Trigger": {
+      "recurrenceRules": []
+    },
+    "node:每天8点定时触发": {
+      "recurrenceRules": []
+    },
+    "node:每隔24小时触发": {
+      "recurrenceRules": []
+    }
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "versionId": "VERSION_ID_PLACEHOLDER",
+  "triggerCount": 2,
+  "tags": [
+    {
+      "createdAt": "2025-07-04T07:19:00.344Z",
+      "updatedAt": "2025-07-04T07:19:00.344Z",
+      "id": "TAG_ID_PLACEHOLDER",
+      "name": "sitemap-monitoring"
+    }
+  ]
+} 
